@@ -1,3 +1,4 @@
+import AsyncStorage from "@react-native-async-storage/async-storage";
 import { Picker } from "@react-native-picker/picker";
 import { Asset } from "expo-asset";
 import { requestForegroundPermissionsAsync } from "expo-location";
@@ -17,12 +18,22 @@ export default function App() {
   const [buses, setBuses] = useState([]);
   const [trace, setTrace] = useState();
 
-  // fetch route list
   useEffect(() => {
     // get location perms
     requestForegroundPermissionsAsync();
 
     (async () => {
+      // load saved route (if exists)
+      try {
+        const r = await AsyncStorage.getItem("@route");
+        if (r !== null) {
+          setRoute(Number.parseInt(r));
+        }
+      } catch (e) {
+        console.warn("Error reading saved route, defaulting to route 10");
+      }
+
+      // fetch route list
       const req = await fetch(
         "http://webwatch.lavta.org/TMWebWatch/Arrivals.aspx/getRoutes",
         {
@@ -66,8 +77,15 @@ export default function App() {
       setBuses(fetchedBus.d);
     };
 
-    // fetch stops and trace
     (async () => {
+      // save selected route to storage
+      try {
+        await AsyncStorage.setItem("@route", id.toString());
+      } catch (e) {
+        console.error("Error saving route key", e);
+      }
+
+      // fetch stops and trace
       const fetchedStops = await (
         await fetch(
           "http://webwatch.lavta.org/TMWebWatch/GoogleMap.aspx/getStops",
