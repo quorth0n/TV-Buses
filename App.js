@@ -1,9 +1,9 @@
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { Picker } from "@react-native-picker/picker";
 import { Asset } from "expo-asset";
-import { requestForegroundPermissionsAsync } from "expo-location";
+import * as Location from "expo-location";
 import { StatusBar } from "expo-status-bar";
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { Alert, Image, StyleSheet, Text, View } from "react-native";
 import MapView, { Marker, Polyline } from "react-native-maps";
 
@@ -11,7 +11,8 @@ export default function App() {
   // assets
   const busURI = Asset.fromModule(require("./assets/bus.png")).uri;
 
-  // state
+  // hooks
+  const mapRef = useRef(null);
   const [route, setRoute] = useState(10);
   const [routeList, setRouteList] = useState([]);
   const [stops, setStops] = useState([]);
@@ -19,9 +20,6 @@ export default function App() {
   const [trace, setTrace] = useState();
 
   useEffect(() => {
-    // get location perms
-    requestForegroundPermissionsAsync();
-
     (async () => {
       // load saved route (if exists)
       try {
@@ -31,6 +29,20 @@ export default function App() {
         }
       } catch (e) {
         console.warn("Error reading saved route, defaulting to route 10");
+      }
+
+      // get location and pan to
+      const { status } = await Location.requestForegroundPermissionsAsync();
+      if (status == "granted") {
+        const location = await Location.getCurrentPositionAsync({});
+
+        mapRef.current?.animateToRegion({
+          latitudeDelta: 0.01,
+          longitudeDelta: 0.01,
+          ...location.coords,
+        });
+      } else {
+        console.error("Permission to access location was denied");
       }
 
       // fetch route list
@@ -80,7 +92,7 @@ export default function App() {
     (async () => {
       // save selected route to storage
       try {
-        await AsyncStorage.setItem("@route", id.toString());
+        await AsyncStorage.setItem("@route", route.toString());
       } catch (e) {
         console.error("Error saving route key", e);
       }
@@ -146,11 +158,12 @@ export default function App() {
         </Picker>
       </View>
       <MapView
+        ref={mapRef}
         initialRegion={{
           latitude: 37.702222,
           longitude: -121.935833,
-          latitudeDelta: 0.0922,
-          longitudeDelta: 0.0421,
+          latitudeDelta: 0.01,
+          longitudeDelta: 0.01,
         }}
         showsUserLocation={true}
         followsUserLocation={true}
