@@ -3,6 +3,7 @@ import { Picker } from "@react-native-picker/picker";
 import { Asset } from "expo-asset";
 import * as Location from "expo-location";
 import { StatusBar } from "expo-status-bar";
+import haversine from "haversine";
 import { useEffect, useRef, useState } from "react";
 import { Alert, Image, StyleSheet, Text, View } from "react-native";
 import MapView, { Marker, Polyline } from "react-native-maps";
@@ -31,20 +32,6 @@ export default function App() {
         console.warn("Error reading saved route, defaulting to route 10");
       }
 
-      // get location and pan to
-      const { status } = await Location.requestForegroundPermissionsAsync();
-      if (status == "granted") {
-        const location = await Location.getCurrentPositionAsync({});
-
-        mapRef.current?.animateToRegion({
-          latitudeDelta: 0.01,
-          longitudeDelta: 0.01,
-          ...location.coords,
-        });
-      } else {
-        console.error("Permission to access location was denied");
-      }
-
       // fetch route list
       const req = await fetch(
         "http://webwatch.lavta.org/TMWebWatch/Arrivals.aspx/getRoutes",
@@ -62,6 +49,9 @@ export default function App() {
   }, []);
 
   useEffect(() => {
+    // perms
+    const locationP = Location.requestForegroundPermissionsAsync();
+
     // fetch bus info defn
     const fetchBus = async () => {
       const fetchedBus = await (
@@ -135,6 +125,28 @@ export default function App() {
 
       setStops(fetchedStops.d);
       setTrace({ penColor: fetchedTrace.d.penColor, polylines });
+
+      // get user location and pan to closest point
+      if ((await locationP).status === "granted") {
+        const { coords: location } = await Location.getCurrentPositionAsync({});
+        const closest = fetchedStops.d?.reduce(
+          (a, b) =>
+            haversine({ latitude: a.lat, longitude: a.lon }, location) <=
+            haversine({ latitude: b.lat, longitude: b.lon }, location)
+              ? a
+              : b,
+          {}
+        );
+
+        mapRef.current?.animateToRegion({
+          latitudeDelta: 0.02,
+          longitudeDelta: 0.02,
+          latitude: closest.lat,
+          longitude: closest.lon,
+        });
+      } else {
+        console.error("Permission to access location was denied");
+      }
     })();
 
     // set bus update interval
@@ -162,11 +174,10 @@ export default function App() {
         initialRegion={{
           latitude: 37.702222,
           longitude: -121.935833,
-          latitudeDelta: 0.01,
-          longitudeDelta: 0.01,
+          latitudeDelta: 0.02,
+          longitudeDelta: 0.02,
         }}
         showsUserLocation={true}
-        followsUserLocation={true}
         showsBuildings={false}
         style={styles.map}
       >
