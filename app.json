@@ -2,7 +2,7 @@
   "expo": {
     "name": "Tri-Valley Buses",
     "slug": "TV-Buses",
-    "version": "1.0.0",
+    "version": "1.0.1",
     "orientation": "portrait",
     "icon": "./assets/icon.png",
     "userInterfaceStyle": "light",
@@ -26,7 +26,13 @@
         "foregroundImage": "./assets/adaptive-icon.png",
         "backgroundColor": "#FFFFFF"
       },
-      "package": "com.liamoflynn.TVBuses"
+      "package": "com.liamoflynn.TVBuses",
+      "config": {
+        "googleMaps": {
+          "apiKey": "AIzaSyC57q70jWEP88n_EoKyOAYuHmyFc4Hj1LY"
+        }
+      },
+      "versionCode": 4
     }
   }
 }
