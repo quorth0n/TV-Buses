@@ -7,6 +7,7 @@ import haversine from "haversine";
 import { useEffect, useRef, useState } from "react";
 import { Alert, Image, StyleSheet, Text, View } from "react-native";
 import MapView, { Marker, Polyline } from "react-native-maps";
+import { SafeAreaView } from "react-native-safe-area-context";
 
 export default function App() {
   // assets
@@ -69,7 +70,31 @@ export default function App() {
       ).json();
 
       // alert once
-      if (!fetchedBus.d?.length) {
+      if (fetchedBus.d?.length) {
+        // get user location and pan to closest bus
+        if ((await locationP).status === "granted") {
+          const { coords: location } = await Location.getCurrentPositionAsync(
+            {}
+          );
+          const closest = fetchedBus.d?.reduce(
+            (a, b) =>
+              haversine({ latitude: a.lat, longitude: a.lon }, location) <=
+              haversine({ latitude: b.lat, longitude: b.lon }, location)
+                ? a
+                : b,
+            {}
+          );
+
+          mapRef.current?.animateToRegion({
+            latitudeDelta: 0.02,
+            longitudeDelta: 0.02,
+            latitude: closest.lat,
+            longitude: closest.lon,
+          });
+        } else {
+          console.error("Permission to access location was denied");
+        }
+      } else {
         Alert.alert(
           "No buses currently running for selected route",
           "Try again later"
@@ -125,28 +150,6 @@ export default function App() {
 
       setStops(fetchedStops.d);
       setTrace({ penColor: fetchedTrace.d.penColor, polylines });
-
-      // get user location and pan to closest point
-      if ((await locationP).status === "granted") {
-        const { coords: location } = await Location.getCurrentPositionAsync({});
-        const closest = fetchedStops.d?.reduce(
-          (a, b) =>
-            haversine({ latitude: a.lat, longitude: a.lon }, location) <=
-            haversine({ latitude: b.lat, longitude: b.lon }, location)
-              ? a
-              : b,
-          {}
-        );
-
-        mapRef.current?.animateToRegion({
-          latitudeDelta: 0.02,
-          longitudeDelta: 0.02,
-          latitude: closest.lat,
-          longitude: closest.lon,
-        });
-      } else {
-        console.error("Permission to access location was denied");
-      }
     })();
 
     // set bus update interval
@@ -156,69 +159,71 @@ export default function App() {
   }, [route]);
 
   return (
-    <View style={styles.container}>
-      <View style={styles.picker}>
-        <Text style={{ flexBasis: "auto", fontSize: 18 }}>Route: </Text>
-        <Picker
-          selectedValue={route}
-          onValueChange={(id) => setRoute(id)}
-          style={{ flexGrow: 1, fontSize: 18 }}
+    <SafeAreaView>
+      <View style={styles.container}>
+        <View style={styles.picker}>
+          <Text style={{ flexBasis: "auto", fontSize: 18 }}>Route: </Text>
+          <Picker
+            selectedValue={route}
+            onValueChange={(id) => setRoute(id)}
+            style={{ flexGrow: 1, fontSize: 18 }}
+          >
+            {routeList.map((r, i) => (
+              <Picker.Item label={r.name} value={r.id} key={i} />
+            ))}
+          </Picker>
+        </View>
+        <MapView
+          ref={mapRef}
+          initialRegion={{
+            latitude: 37.702222,
+            longitude: -121.935833,
+            latitudeDelta: 0.02,
+            longitudeDelta: 0.02,
+          }}
+          showsUserLocation={true}
+          showsBuildings={false}
+          style={styles.map}
         >
-          {routeList.map((r, i) => (
-            <Picker.Item label={r.name} value={r.id} key={i} />
-          ))}
-        </Picker>
-      </View>
-      <MapView
-        ref={mapRef}
-        initialRegion={{
-          latitude: 37.702222,
-          longitude: -121.935833,
-          latitudeDelta: 0.02,
-          longitudeDelta: 0.02,
-        }}
-        showsUserLocation={true}
-        showsBuildings={false}
-        style={styles.map}
-      >
-        {stops.map((stop, i) => (
-          <Marker
-            key={i}
-            coordinate={{ latitude: stop.lat, longitude: stop.lon }}
-            title={stop.stopName}
-            description={stop.timePointID ? undefined : "(minor stop)"}
-            pinColor={stop.timePointID ? "red" : "teal"}
-            opacity={stop.timePointID ? 1 : 0.85}
-          />
-        ))}
-        {buses &&
-          buses.map((bus, i) => (
+          {stops.map((stop, i) => (
             <Marker
               key={i}
-              coordinate={{ latitude: bus.lat, longitude: bus.lon }}
-              rotation={bus.heading}
-              style={{ zIndex: 100 }}
-            >
-              <Image
-                source={{ uri: busURI }}
-                style={{
-                  width: 32,
-                  height: 32,
-                  // flip image for opposite direction
-                  transform: [{ scaleX: bus.heading > 180 ? -1 : 1 }],
-                }}
-                resizeMode="contain"
-                resizeMethod="resize"
-              />
-            </Marker>
+              coordinate={{ latitude: stop.lat, longitude: stop.lon }}
+              title={stop.stopName}
+              description={stop.timePointID ? undefined : "(minor stop)"}
+              pinColor={stop.timePointID ? "red" : "teal"}
+              opacity={stop.timePointID ? 1 : 0.85}
+            />
           ))}
-        {trace &&
-          trace.polylines.map((p, i) => (
-            <Polyline strokeColor={trace.penColor} coordinates={p} key={i} />
-          ))}
-      </MapView>
-      <StatusBar style="auto" />
-    </View>
+          {buses &&
+            buses.map((bus, i) => (
+              <Marker
+                key={i}
+                coordinate={{ latitude: bus.lat, longitude: bus.lon }}
+                rotation={bus.heading}
+                style={{ zIndex: 100 }}
+              >
+                <Image
+                  source={{ uri: busURI }}
+                  style={{
+                    width: 32,
+                    height: 32,
+                    // flip image for opposite direction
+                    transform: [{ scaleX: bus.heading > 180 ? -1 : 1 }],
+                  }}
+                  resizeMode="contain"
+                  resizeMethod="resize"
+                />
+              </Marker>
+            ))}
+          {trace &&
+            trace.polylines.map((p, i) => (
+              <Polyline strokeColor={trace.penColor} coordinates={p} key={i} />
+            ))}
+        </MapView>
+        <StatusBar style="auto" />
+      </View>
+    </SafeAreaView>
   );
 }
 
